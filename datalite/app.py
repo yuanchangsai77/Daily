@@ -1,5 +1,6 @@
 from flask import Flask, request, jsonify, send_from_directory
 from datetime import datetime
+from werkzeug.utils import secure_filename
 import os
 import sqlite3
 
@@ -7,6 +8,11 @@ app = Flask(__name__)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.abspath(os.path.join(BASE_DIR, '..', 'func'))
 DB_PATH = os.path.join(BASE_DIR, 'data.db')
+UPLOAD_DIR = os.path.abspath(os.path.join(BASE_DIR, '..', 'uploads'))
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+app.config['UPLOAD_FOLDER'] = UPLOAD_DIR
+app.config['MAX_CONTENT_LENGTH'] = 5 * 1024 * 1024  # 5 MB per upload
 
 
 def get_connection():
@@ -31,6 +37,13 @@ def init_db():
                         name TEXT NOT NULL,
                         completed INTEGER NOT NULL,
                         date TEXT)''')
+    # Create moments table
+    cursor.execute('''CREATE TABLE IF NOT EXISTS moments (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        title TEXT NOT NULL,
+                        note TEXT,
+                        image_path TEXT NOT NULL,
+                        created_at TEXT NOT NULL)''')
     conn.commit()
     conn.close()
 
@@ -49,6 +62,10 @@ def daily_tracker_page():
 @app.route('/accounting')
 def accounting_manager_page():
     return send_from_directory(STATIC_DIR, 'accounting_manager.html')
+
+@app.route('/moments-gallery')
+def moments_gallery_page():
+    return send_from_directory(STATIC_DIR, 'moments.html')
 
 @app.route('/transactions', methods=['GET', 'POST', 'DELETE'])
 def transactions():
@@ -172,6 +189,64 @@ def update_goal(goal_id):
         return jsonify({'error': 'Goal not found'}), 404
 
     return jsonify(dict(updated_goal))
+
+
+@app.route('/moments', methods=['GET', 'POST'])
+def moments():
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    if request.method == 'GET':
+        cursor.execute('SELECT id, title, note, image_path, created_at FROM moments ORDER BY created_at DESC, id DESC')
+        rows = cursor.fetchall()
+        conn.close()
+        moments = [
+            {
+                'id': row['id'],
+                'title': row['title'],
+                'note': row['note'],
+                'image_url': f"/uploads/{row['image_path']}",
+                'created_at': row['created_at'],
+            }
+            for row in rows
+        ]
+        return jsonify(moments)
+
+    data_title = request.form.get('title', '').strip()
+    if not data_title:
+        conn.close()
+        return jsonify({'error': 'Title is required'}), 400
+
+    file = request.files.get('photo')
+    if file is None or file.filename == '':
+        conn.close()
+        return jsonify({'error': 'Photo is required'}), 400
+
+    filename = secure_filename(file.filename)
+    timestamp = datetime.utcnow().strftime('%Y%m%d%H%M%S%f')
+    final_name = f"{timestamp}_{filename}"
+    file.save(os.path.join(app.config['UPLOAD_FOLDER'], final_name))
+
+    note = request.form.get('note', '').strip() or None
+    created_at = datetime.utcnow().isoformat()
+    cursor.execute(
+        'INSERT INTO moments (title, note, image_path, created_at) VALUES (?, ?, ?, ?)',
+        (data_title, note, final_name, created_at),
+    )
+    moment_id = cursor.lastrowid
+    conn.commit()
+    cursor.execute('SELECT id, title, note, image_path, created_at FROM moments WHERE id = ?', (moment_id,))
+    new_moment = cursor.fetchone()
+    conn.close()
+
+    response = dict(new_moment)
+    response['image_url'] = f"/uploads/{new_moment['image_path']}"
+    return jsonify(response), 201
+
+
+@app.route('/uploads/<path:filename>')
+def uploaded_file(filename):
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
 if __name__ == '__main__':
     init_db()

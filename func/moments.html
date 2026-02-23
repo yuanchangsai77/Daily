@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>每日瞬间</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            background: #f5f7fb;
+            color: #333;
+        }
+        header {
+            background-color: #ff8a5c;
+            color: white;
+            padding: 1.2rem;
+            text-align: center;
+        }
+        .container {
+            max-width: 800px;
+            margin: 1.5rem auto;
+            padding: 1rem;
+        }
+        form {
+            background: white;
+            padding: 1rem;
+            border-radius: 10px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+            display: grid;
+            gap: 0.8rem;
+        }
+        input[type="text"],
+        textarea {
+            width: 100%;
+            padding: 0.6rem;
+            border-radius: 6px;
+            border: 1px solid #ccc;
+            font-size: 1rem;
+            box-sizing: border-box;
+        }
+        input[type="file"] {
+            border: none;
+        }
+        button {
+            padding: 0.8rem;
+            border: none;
+            border-radius: 6px;
+            background-color: #ff8a5c;
+            color: white;
+            font-size: 1rem;
+            cursor: pointer;
+        }
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .gallery {
+            margin-top: 2rem;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+        .card {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        .card img {
+            width: 100%;
+            height: 160px;
+            object-fit: cover;
+        }
+        .card-body {
+            padding: 0.8rem;
+        }
+        .card-title {
+            font-weight: bold;
+            margin: 0;
+        }
+        .card-date {
+            font-size: 0.85rem;
+            color: #777;
+            margin-top: 0.2rem;
+        }
+        .card-note {
+            margin-top: 0.5rem;
+            font-size: 0.95rem;
+            white-space: pre-wrap;
+        }
+        .empty {
+            text-align: center;
+            color: #888;
+            margin-top: 2rem;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>每日瞬间</h1>
+        <p>保存每天最值得纪念的一张照片</p>
+    </header>
+    <div class="container">
+        <form id="moment-form">
+            <input type="text" id="title" placeholder="瞬间标题，如：黄昏散步" required>
+            <textarea id="note" rows="3" placeholder="可选：记录一些感受"></textarea>
+            <input type="file" id="photo" accept="image/*" required>
+            <button type="submit">保存今日瞬间</button>
+        </form>
+
+        <section id="moment-gallery" class="gallery"></section>
+        <p id="empty-placeholder" class="empty" style="display:none;">还没有任何记录，快来上传今天的第一张照片吧！</p>
+    </div>
+
+    <script>
+        const form = document.getElementById('moment-form');
+        const gallery = document.getElementById('moment-gallery');
+        const emptyPlaceholder = document.getElementById('empty-placeholder');
+
+        form.addEventListener('submit', function(event) {
+            event.preventDefault();
+            const formData = new FormData();
+            formData.append('title', document.getElementById('title').value.trim());
+            formData.append('note', document.getElementById('note').value.trim());
+            const photoFile = document.getElementById('photo').files[0];
+            if (!photoFile) {
+                alert('请选择一张照片');
+                return;
+            }
+            formData.append('photo', photoFile);
+
+            const submitButton = form.querySelector('button');
+            submitButton.disabled = true;
+            fetch('/moments', { method: 'POST', body: formData })
+                .then(resp => resp.json())
+                .then(data => {
+                    if (data.error) {
+                        throw new Error(data.error);
+                    }
+                    form.reset();
+                    loadMoments();
+                })
+                .catch(error => {
+                    console.error('保存失败', error);
+                    alert('保存失败：' + error.message);
+                })
+                .finally(() => {
+                    submitButton.disabled = false;
+                });
+        });
+
+        function loadMoments() {
+            fetch('/moments')
+                .then(resp => resp.json())
+                .then(items => {
+                    gallery.innerHTML = '';
+                    if (!items || items.length === 0) {
+                        emptyPlaceholder.style.display = 'block';
+                        return;
+                    }
+                    emptyPlaceholder.style.display = 'none';
+                    items.forEach(item => {
+                        const card = document.createElement('article');
+                        card.className = 'card';
+                        card.innerHTML = `
+                            <img src="${item.image_url}" alt="${item.title}">
+                            <div class="card-body">
+                                <p class="card-title">${item.title}</p>
+                                <p class="card-date">${formatDate(item.created_at)}</p>
+                                ${item.note ? `<p class="card-note">${escapeHtml(item.note)}</p>` : ''}
+                            </div>
+                        `;
+                        gallery.appendChild(card);
+                    });
+                })
+                .catch(error => {
+                    console.error('加载失败', error);
+                    alert('加载瞬间失败，请稍后重试');
+                });
+        }
+
+        function formatDate(isoString) {
+            if (!isoString) return '';
+            const date = new Date(isoString);
+            return date.toLocaleString('zh-CN', { dateStyle: 'medium', timeStyle: 'short' });
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        document.addEventListener('DOMContentLoaded', loadMoments);
+    </script>
+</body>
+</html>

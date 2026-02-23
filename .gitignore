@@ -22,5 +22,9 @@ datalite/data.db
 *.sqlite
 *.sqlite3
 
+# Uploaded media (keep placeholder)
+uploads/*
+!uploads/.gitkeep
+
 # Logs
 *.log

@@ -1,6 +1,6 @@
 # Daily
 
-一个轻量的生活管理工具，包含 **每日打卡** 与 **记账管理** 两大功能。后端使用 Flask + SQLite 提供统一 API，并把前端页面（`func/` 目录）作为静态文件直接服务，让你在浏览器里完成所有操作。
+一个轻量的生活管理工具，包含 **每日打卡**、**记账管理** 与 **每日瞬间** 三大功能。后端使用 Flask + SQLite 提供统一 API，并把前端页面（`func/` 目录）作为静态文件直接服务，让你在浏览器里完成所有操作。
 
 ## 功能亮点
 
@@ -11,6 +11,9 @@
 - **记账管理**
   - 快速录入收入/支出，金额支持小数。
   - 实时汇总净收入，支持删除任意记录。
+- **每日瞬间**
+  - 上传每日最想留存的一张照片，可附带标题与描述。
+  - 浏览栅格画廊，按时间倒序查看记录。
 - **单一后端**
   - 所有数据保存于 `datalite/data.db` SQLite 文件。
   - RESTful API：`/goals` 与 `/transactions` 提供 GET/POST/DELETE 等操作。
@@ -31,6 +34,7 @@ python3 datalite/app.py
 - `http://127.0.0.1:5000/`：功能选择面板。
 - `http://127.0.0.1:5000/daily-tracker`：每日打卡。
 - `http://127.0.0.1:5000/accounting`：记账管理。
+- `http://127.0.0.1:5000/moments-gallery`：每日瞬间。
 
 ## API 概览
 
@@ -43,6 +47,8 @@ python3 datalite/app.py
 | GET    | `/transactions`          | 获取所有账务记录         |
 | POST   | `/transactions`          | 新增账务记录             |
 | DELETE | `/transactions`          | 删除账务记录（JSON：id） |
+| GET    | `/moments`               | 获取所有瞬间（包含图片 URL）|
+| POST   | `/moments`               | 上传瞬间（title、note、photo）|
 
 ## 代码结构
 
@@ -53,7 +59,9 @@ datalite/
 func/
 ├── index.html        # 功能选择页
 ├── daily_tracker.html
-└── accounting_manager.html
+├── accounting_manager.html
+└── moments.html
+uploads/              # 存放图片（仅本地，不追踪）
 agent.md              # 高层功能说明
 ```
 
